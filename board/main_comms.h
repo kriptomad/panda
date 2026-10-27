@@ -264,7 +264,11 @@ int comms_control_handler(ControlPacket_t *req, uint8_t *resp) {
       break;
     // **** 0xe6: set custom clock source period and pulse length
     case 0xe6:
+#ifdef STM32H7
       clock_source_set_timer_params(req->param1, req->param2);
+#else
+      // the black panda has no clock source output
+#endif
       break;
     // **** 0xe7: set power save state
     case 0xe7:

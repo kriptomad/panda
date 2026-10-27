@@ -15,7 +15,7 @@ float dts_get_temperature(void) {
   float cal2 = (float) *TEMPSENSOR_CAL2_ADDR;
   if ((adc_avdd_mV != 0U) && (cal2 > cal1)) {
     float raw_3v3 = ((float) raw * (float) adc_avdd_mV) / 3300.0f;
-    ret = (float) TEMPSENSOR_CAL1_TEMP + ((raw_3v3 - cal1) * (float) (TEMPSENSOR_CAL2_TEMP - TEMPSENSOR_CAL1_TEMP) / (cal2 - cal1));
+    ret = (float) TEMPSENSOR_CAL1_TEMP + ((raw_3v3 - cal1) * ((float) TEMPSENSOR_CAL2_TEMP - (float) TEMPSENSOR_CAL1_TEMP) / (cal2 - cal1));
   }
   return ret;
 }

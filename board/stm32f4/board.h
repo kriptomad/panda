@@ -12,7 +12,6 @@
 #include "board/drivers/harness.h"
 #include "board/drivers/fan.h"
 #include "board/stm32f4/llfan.h"
-#include "board/drivers/clock_source.h"
 #include "board/boards/black.h"
 
 // No sound hardware on the STM32F4 boards

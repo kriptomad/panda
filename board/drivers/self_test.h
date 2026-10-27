@@ -58,7 +58,6 @@ static RAMECC_MonitorTypeDef *const ecc_monitors[] = {
 #define DMA_TEST_WORDS 8U
 #ifdef STM32H7
 // outside the tested regions, copies are read back instead
-__attribute__((section(".sram12"))) static volatile uint32_t ram_test_backup[RAM_TEST_BLOCK_WORDS];
 __attribute__((section(".sram12"))) static uint32_t dma_test_buf[DMA_TEST_WORDS];
 #else
 // inside the only RAM, ram_test_skip() keeps the running test clear of both
@@ -132,14 +131,13 @@ static bool ram_test_skip(uint32_t start, uint32_t end) {
   bool guard_hit = (start < (uint32_t)&_stack_guard_end) && (end > (uint32_t)&_stack_guard);
   bool stack_hit = (start < (sp + RAM_TEST_STACK_WINDOW)) && (end > (sp - RAM_TEST_STACK_WINDOW));
 #ifdef STM32H7
-  bool buffers_hit = false;
+  return guard_hit || stack_hit;
 #else
   // the test's own backup and the DMA destination live in the tested RAM, both are covered at boot
   bool backup_hit = (start < ((uint32_t)&ram_test_backup[0] + sizeof(ram_test_backup))) && (end > (uint32_t)&ram_test_backup[0]);
   bool dma_hit = (start < ((uint32_t)&dma_test_buf[0] + sizeof(dma_test_buf))) && (end > (uint32_t)&dma_test_buf[0]);
-  bool buffers_hit = backup_hit || dma_hit;
+  return guard_hit || stack_hit || backup_hit || dma_hit;
 #endif
-  return guard_hit || stack_hit || buffers_hit;
 }
 
 // a decoder fault on an address bit above the block makes the block share cells with an alias, which then reads the patterns
@@ -155,10 +153,19 @@ static bool ram_test_aliases_ok(volatile uint32_t *const *alias, const uint32_t 
 // the march covers the address decoder within the block, the aliases the address bits above it (UM2331 RAM_SM_8),
 // checked after both backgrounds since an alias can hold one of them already
 static bool ram_test_block(uint32_t addr, uint32_t words, uint32_t start, uint32_t end) {
+#ifdef STM32H7
+  // outside the tested regions, copies are read back instead
+  __attribute__((section(".sram12"))) static volatile uint32_t ram_test_backup[RAM_TEST_BLOCK_WORDS];
+#endif
   volatile uint32_t *p = (uint32_t *)addr;
   volatile uint32_t *alias[RAM_TEST_ALIASES];
   uint32_t alias_val[RAM_TEST_ALIASES];
   uint8_t aliases = 0U;
+  // unused slots point at the block itself and hold no pattern, only the first `aliases` slots are compared
+  for (uint8_t i = 0U; i < RAM_TEST_ALIASES; i++) {
+    alias[i] = p;
+    alias_val[i] = 0U;
+  }
   for (uint32_t bit = RAM_TEST_BLOCK_WORDS * 4U; (bit < (end - start)) && (aliases < RAM_TEST_ALIASES); bit <<= 1U) {
     uint32_t a = addr ^ bit;
     if ((a >= start) && ((a + 4U) <= end) && !ram_test_skip(a, a + 4U)) {
@@ -217,7 +224,9 @@ static bool ram_test_next(void) {
   bool ok = ram_test_skip(block, block + (words * 4U)) || ram_test_block(block, words, ram_regions[region].start, ram_regions[region].end);
   block += RAM_TEST_STEP;
   if (block >= ram_regions[region].end) {
-    region = (uint8_t)((region + 1U) % (sizeof(ram_regions) / sizeof(ram_regions[0])));
+    // wraps after the last region, the F4 has only one so a modulo is avoided
+    uint8_t next = (uint8_t)(region + 1U);
+    region = (next < (sizeof(ram_regions) / sizeof(ram_regions[0]))) ? next : 0U;
     block = 0U;
   }
   return ok;

@@ -79,9 +79,13 @@ void can_send(CANPacket_t *to_push, uint8_t bus_number, bool skip_tx_hook);
 bool is_speed_valid(uint32_t speed, const uint32_t *all_speeds, uint8_t len);
 
 // ******************** clock_source ********************
+// TIM1/TIM8 clock source output, the STM32H7 boards only
+#ifdef STM32H7
 
 void clock_source_set_timer_params(uint16_t param1, uint16_t param2);
 void clock_source_init(bool enable_channel1);
+
+#endif // STM32H7
 
 // ******************** fan ********************
 
