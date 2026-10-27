@@ -1,11 +1,10 @@
 #pragma once
 
 #include "board_declarations.h"
-#include "red.h"
 
-// //////////////////////////////////////////////////////////////////// //
+// ////////////////////////////////////////////////////////////////////////////// //
 // Hybrid Panda: black panda hardware + STM32H725ZGT6 (LQFP144) + 4x TJA1042TK/3 //
-// //////////////////////////////////////////////////////////////////// //
+// ////////////////////////////////////////////////////////////////////////////// //
 //
 // Open-hardware board (HybridPanda.kicad_sch). Every pin below was taken from
 // the schematic netlist (U7 = STM32H725ZGT6), not from the red panda.
@@ -26,7 +25,7 @@
 // | relay SBU2                | PC11 (110)         | relay_SBU2   | Q1 DDTA143E (PNP, E=+5V, C=SBU2)            |
 // | 12V sense (ADC1_INP2)     | PF11 (52)          | VoltageSens  | 10k/1k divider (x11) from 12V_Protected     |
 // | 5V out sense (ADC1_INP5)  | PB1 (50)           | 5VOUT_S      | 10k/10k divider from +5V                    |
-// | USB-A load switch         | PB14 (74)          | USB_LOAD     | Q3 PDTC114EU -> U1 AP22615 EN (10k to +5V)  |
+// | USB-A load switch         | PB14 (74)          | USB_LOAD     | Q3 PDTC114EU (NPN, E=GND) -> U1 AP22615 EN (R26 10k to +5V); push-pull, 0 = port ON |
 // | LED red / green / blue    | PE4 (3) / PE3 (2) / PE2 (1) | LED_RED/GREEN/BLUE | U5 common anode to 3V3, active low |
 // | USB OTG_FS DM / DP        | PA11 (100) / PA12 (101) | USB_D- / USB_D+ | 22R series, USB-A U3 to comma device  |
 // | HSE                       | PH0 (25) / PH1 (26)| HSE_IN/OUT   | Y1 25 MHz                                   |
@@ -42,7 +41,113 @@
 // (see stm32h7/clock.h), which requires VFBSMPS to be connected to VCAP.
 //
 // Electrically this board is pin-identical to the red panda for every function
-// used by the firmware, so the red panda GPIO/ADC/CAN routines are reused.
+// used by the firmware (same CAN pins/AFs, STB polarity, ADC channels, LEDs). The
+// only deviation is PB14: red leaves it open-drain high with the internal pull-up,
+// which on this board biases Q3 (PDTC114EU, 10k internal base resistor) right
+// at its threshold and can pull the AP22615 EN low, switching the USB-A port
+// (the comma device's power) off. Here it is driven push-pull: 0 = Q3 off =
+// EN pulled to +5V by R26 = port ON, 1 = port OFF. Like the black panda
+// (black_set_usb_load_switch(true) at init, never touched again), the port is
+// kept on at all times, including power-save mode, because the comma device is
+// powered from it.
+
+static void hybrid_enable_can_transceiver(uint8_t transceiver, bool enabled) {
+  switch (transceiver) {
+    case 1U:
+      set_gpio_output(GPIOG, 11, !enabled);
+      break;
+    case 2U:
+      set_gpio_output(GPIOB, 3, !enabled);
+      break;
+    case 3U:
+      set_gpio_output(GPIOD, 7, !enabled);
+      break;
+    case 4U:
+      set_gpio_output(GPIOB, 4, !enabled);
+      break;
+    default:
+      break;
+  }
+}
+
+static void hybrid_set_can_mode(uint8_t mode) {
+  hybrid_enable_can_transceiver(2U, false);
+  hybrid_enable_can_transceiver(4U, false);
+  switch (mode) {
+    case CAN_MODE_NORMAL:
+    case CAN_MODE_OBD_CAN2:
+      if ((bool)(mode == CAN_MODE_NORMAL) != (bool)(harness.status == HARNESS_STATUS_FLIPPED)) {
+        // B12,B13 (BUS1O, U8): disable
+        set_gpio_pullup(GPIOB, 12, PULL_NONE);
+        set_gpio_mode(GPIOB, 12, MODE_ANALOG);
+
+        set_gpio_pullup(GPIOB, 13, PULL_NONE);
+        set_gpio_mode(GPIOB, 13, MODE_ANALOG);
+
+        // B5,B6 (BUS1N, U10): FDCAN2
+        set_gpio_pullup(GPIOB, 5, PULL_NONE);
+        set_gpio_alternate(GPIOB, 5, GPIO_AF9_FDCAN2);
+
+        set_gpio_pullup(GPIOB, 6, PULL_NONE);
+        set_gpio_alternate(GPIOB, 6, GPIO_AF9_FDCAN2);
+        hybrid_enable_can_transceiver(2U, true);
+      } else {
+        // B5,B6 (BUS1N, U10): disable
+        set_gpio_pullup(GPIOB, 5, PULL_NONE);
+        set_gpio_mode(GPIOB, 5, MODE_ANALOG);
+
+        set_gpio_pullup(GPIOB, 6, PULL_NONE);
+        set_gpio_mode(GPIOB, 6, MODE_ANALOG);
+
+        // B12,B13 (BUS1O, U8): FDCAN2
+        set_gpio_pullup(GPIOB, 12, PULL_NONE);
+        set_gpio_alternate(GPIOB, 12, GPIO_AF9_FDCAN2);
+
+        set_gpio_pullup(GPIOB, 13, PULL_NONE);
+        set_gpio_alternate(GPIOB, 13, GPIO_AF9_FDCAN2);
+        hybrid_enable_can_transceiver(4U, true);
+      }
+      break;
+    default:
+      break;
+  }
+}
+
+static uint32_t hybrid_read_voltage_mV(void){
+  // PF11 = ADC1_INP2, R3 10k / R2 1k divider from 12V_Protected
+  return adc_get_mV(&(const adc_signal_t) ADC_CHANNEL_DEFAULT(ADC1, 2)) * 11U;
+}
+
+static void hybrid_set_usb_load_switch(bool enabled) {
+  set_gpio_output(GPIOB, 14, !enabled);
+}
+
+static void hybrid_init(void) {
+  common_init_gpio();
+
+  // G11,B3,D7,B4: transceiver standby (STB, high = standby)
+  set_gpio_pullup(GPIOG, 11, PULL_NONE);
+  set_gpio_mode(GPIOG, 11, MODE_OUTPUT);
+
+  set_gpio_pullup(GPIOB, 3, PULL_NONE);
+  set_gpio_mode(GPIOB, 3, MODE_OUTPUT);
+
+  set_gpio_pullup(GPIOD, 7, PULL_NONE);
+  set_gpio_mode(GPIOD, 7, MODE_OUTPUT);
+
+  set_gpio_pullup(GPIOB, 4, PULL_NONE);
+  set_gpio_mode(GPIOB, 4, MODE_OUTPUT);
+
+  // B1: 5VOUT_S
+  set_gpio_pullup(GPIOB, 1, PULL_NONE);
+  set_gpio_mode(GPIOB, 1, MODE_ANALOG);
+
+  // B14: USB-A load switch, push-pull, port on
+  set_gpio_output_type(GPIOB, 14, OUTPUT_TYPE_PUSH_PULL);
+  set_gpio_pullup(GPIOB, 14, PULL_NONE);
+  hybrid_set_usb_load_switch(true);
+  set_gpio_mode(GPIOB, 14, MODE_OUTPUT);
+}
 
 static harness_configuration hybrid_harness_config = {
   .GPIO_SBU1 = GPIOC,
@@ -64,12 +169,12 @@ board board_hybrid = {
   .has_fan = false,
   .avdd_mV = 3300U,
   .fan_enable_cooldown_time = 0U,
-  .init = red_init,
-  .enable_can_transceiver = red_enable_can_transceiver,
+  .init = hybrid_init,
+  .enable_can_transceiver = hybrid_enable_can_transceiver,
   .led_GPIO = {GPIOE, GPIOE, GPIOE},
   .led_pin = {4, 3, 2},
-  .set_can_mode = red_set_can_mode,
-  .read_voltage_mV = red_read_voltage_mV,
+  .set_can_mode = hybrid_set_can_mode,
+  .read_voltage_mV = hybrid_read_voltage_mV,
   .read_current_mA = unused_read_current,
   .set_fan_enabled = unused_set_fan_enabled,
   .set_ir_power = unused_set_ir_power,

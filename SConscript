@@ -169,10 +169,14 @@ common_flags += [f"-DHEALTH_PACKET_VERSION=0x{hh:08X}U", f"-DCAN_PACKET_VERSION_
 # panda fw
 build_project("panda_h7", base_project_h7, "./board/main.c", [])
 
-# hybrid panda fw variant for boards whose core is LDO-supplied (VFBSMPS not linked to VCAP).
+# hybrid panda fw: same hardware abstraction as panda_h7, but the board type is fixed at
+# compile time so boards strapped as red (PF9 = GND) still get the hybrid board init (PB14).
+build_project("panda_h7_hybrid", base_project_h7, "./board/main.c", ["-DHYBRID_BOARD"])
+
+# hybrid panda fw variant for board revisions whose core is LDO-supplied (VFBSMPS not linked to VCAP).
 # Opt-in: HYBRID_LDO=1 scons. Not compatible with red panda hardware.
 if os.getenv("HYBRID_LDO"):
-  build_project("panda_h7_ldo", base_project_h7, "./board/main.c", ["-DPWR_FORCE_LDO"])
+  build_project("panda_h7_ldo", base_project_h7, "./board/main.c", ["-DHYBRID_BOARD", "-DPWR_FORCE_LDO"])
 
 # body fw
 build_project("body_h7", base_project_h7, "./board/body/main.c", ["-DPANDA_BODY"])

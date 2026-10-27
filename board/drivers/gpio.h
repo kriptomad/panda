@@ -41,7 +41,7 @@ void set_gpio_output_type(GPIO_TypeDef *GPIO, unsigned int pin, unsigned int out
   if(output_type == OUTPUT_TYPE_OPEN_DRAIN) {
     register_set_bits(&(GPIO->OTYPER), (1UL << pin));
   } else {
-    register_clear_bits(&(GPIO->OTYPER), (1U << pin));
+    register_clear_bits(&(GPIO->OTYPER), (1UL << pin));
   }
   EXIT_CRITICAL();
 }

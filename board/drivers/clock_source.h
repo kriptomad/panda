@@ -15,6 +15,8 @@ void clock_source_set_timer_params(uint16_t param1, uint16_t param2) {
   register_set(&(TIM1->CCR4), ((TIM1->ARR + 1U) / 2U), 0xFFFFU);
 }
 
+// Only tres/cuatro drive a clock source; those boards are excluded from HYBRID_BOARD builds.
+#ifndef HYBRID_BOARD
 void clock_source_init(bool enable_channel1) {
   // Setup timer
   register_set(&(TIM1->PSC), ((APB2_TIMER_FREQ*100U)-1U), 0xFFFFU);           // Tick on 0.1 ms
@@ -66,3 +68,4 @@ void clock_source_init(bool enable_channel1) {
   register_set(&(TIM1->CR1), TIM_CR1_CEN, 0x3FU);
   register_set(&(TIM8->CR1), TIM_CR1_CEN, 0x3FU);
 }
+#endif

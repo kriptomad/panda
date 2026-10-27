@@ -19,6 +19,7 @@ APB4 per: 60MHz
 PCLK1: 60MHz (for USART2,3,4,5,7,8)
 */
 
+#ifndef PWR_FORCE_LDO
 typedef enum {
   PACKAGE_UNKNOWN = 0,
   PACKAGE_WITH_SMPS = 1,
@@ -46,6 +47,7 @@ static PackageSMPSType get_package_smps_type(void) {
   }
   return ret;
 }
+#endif
 
 void clock_init(void) {
   /*
@@ -58,14 +60,14 @@ void clock_init(void) {
     In a normal bootup, the bootstub will be the first to write this. The app section calls clock_init again, but the CR3 write will silently fail. This is fine for most cases, but caution should be taken that the bootstub and app always write the same config.
   */
 
-  // Set power mode to direct SMPS power supply (depends on the board layout)
-  PackageSMPSType package_smps = get_package_smps_type();
 #ifdef PWR_FORCE_LDO
   // Board has the LQFP144 package but VFBSMPS is not wired to VCAP (e.g. hybrid panda
   // rev. without the SMPS->VCAP link), so the core can only be supplied by the LDO.
   // This must match in bootstub and app, and is a separate build target (not red panda compatible).
-  package_smps = PACKAGE_WITHOUT_SMPS;
-#endif
+  register_set(&(PWR->CR3), PWR_CR3_LDOEN, 0xFU);
+#else
+  // Set power mode to direct SMPS power supply (depends on the board layout)
+  PackageSMPSType package_smps = get_package_smps_type();
   if (package_smps == PACKAGE_WITHOUT_SMPS) {
     register_set(&(PWR->CR3), PWR_CR3_LDOEN, 0xFU); // no SMPS, so powered by LDO
   } else if (package_smps == PACKAGE_WITH_SMPS) {
@@ -73,6 +75,7 @@ void clock_init(void) {
   } else {
     while(true); // unknown package, let's hang here
   }
+#endif
 
   // Set VOS level (VOS3 to 170Mhz, VOS2 to 300Mhz, VOS1 to 400Mhz, VOS0 to 550Mhz)
   register_set(&(PWR->D3CR), PWR_D3CR_VOS_1 | PWR_D3CR_VOS_0, 0xC000U); //VOS1, needed for 80Mhz CAN FD

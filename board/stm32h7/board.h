@@ -15,13 +15,22 @@
 #include "board/stm32h7/sound.h"
 #include "board/drivers/fake_siren.h"
 #include "board/drivers/clock_source.h"
+#ifndef HYBRID_BOARD
 #include "board/boards/red.h"
 #include "board/boards/tres.h"
 #include "board/boards/cuatro.h"
+#endif
 #include "board/boards/hybrid.h"
 
 
 void detect_board_type(void) {
+#ifdef HYBRID_BOARD
+  // Hybrid Panda build: the board is known at compile time. Boards shipped with
+  // PF9 still strapped to GND read id1 == 0 (red) and would otherwise get the red
+  // panda PB14 (USB-A load switch) handling, so the straps are ignored here.
+  hw_type = HW_TYPE_HYBRID_PANDA;
+  current_board = &board_hybrid;
+#else
   // On STM32H7 pandas, we use two different sets of pins.
   const uint8_t id1 = detect_with_pull(GPIOF, 7, PULL_UP) |
                      (detect_with_pull(GPIOF, 8, PULL_UP) << 1U) |
@@ -56,4 +65,5 @@ void detect_board_type(void) {
     hw_type = HW_TYPE_UNKNOWN;
     print("Hardware type is UNKNOWN!\n");
   }
+#endif
 }
