@@ -18,6 +18,7 @@
 #include "board/boards/red.h"
 #include "board/boards/tres.h"
 #include "board/boards/cuatro.h"
+#include "board/boards/hybrid.h"
 
 
 void detect_board_type(void) {
@@ -45,6 +46,12 @@ void detect_board_type(void) {
   } else if (id1 == 2U) {
     hw_type = HW_TYPE_TRES;
     current_board = &board_tres;
+  } else if (id1 == 4U) {
+    // Hybrid Panda: PF7, PF8, PF10 strapped to GND, PF9 left open (read high by the pull-up).
+    // Red is id1 == 0 (all four GND) and tres is id1 == 2 (only PF8 open), so the
+    // single PF9 strap cannot alias either of them.
+    hw_type = HW_TYPE_HYBRID_PANDA;
+    current_board = &board_hybrid;
   } else {
     hw_type = HW_TYPE_UNKNOWN;
     print("Hardware type is UNKNOWN!\n");
