@@ -3,8 +3,8 @@
 **
 **  File        : stm32f4_flash.ld
 **
-**  Abstract    : Linker script for STM32F407VG Device with
-**                1024KByte FLASH, 192KByte RAM
+**  Abstract    : Linker script for STM32F413 Device with
+**                1024KByte FLASH, 320KByte RAM
 **
 **                Set heap size, stack size and stack location according
 **                to application requirements.
@@ -33,21 +33,25 @@
 ENTRY(Reset_Handler)
 
 /* Highest address of the user mode stack */
-enter_bootloader_mode = 0x2001FFFC;
-_estack = 0x2001FFFC;    /* end of 128K RAM on AHB bus*/
+/* cookies at the top of SRAM, kept across resets and the startup RAM test */
+enter_bootloader_mode = 0x2004FFFC;
+fault_cookie = 0x2004FFF8;
+self_test_cookie = 0x2004FFF4;
+
+_estack = 0x2004FFF0;    /* end of 320K RAM minus the cookies */
+_sram_start = ORIGIN(RAM);
+_sram_end = ORIGIN(RAM) + LENGTH(RAM);
 _app_start = 0x08004000; /* Reserve Sector 0(16K) for bootloader */
 
 /* Generate a link error if heap and stack don't fit into RAM */
-_Min_Heap_Size = 0;      /* required amount of heap  */
+_Min_Heap_Size = 0x200;      /* required amount of heap  */
 _Min_Stack_Size = 0x400; /* required amount of stack */
 
 /* Specify the memory areas */
 MEMORY
 {
   FLASH (rx)      : ORIGIN = 0x08000000, LENGTH = 1024K
-  RAM (xrw)       : ORIGIN = 0x20000000, LENGTH = 256K
-  RAM2 (xrw)      : ORIGIN = 0x20040000, LENGTH = 64K
-  MEMORY_B1 (rx)  : ORIGIN = 0x60000000, LENGTH = 0K
+  RAM (xrw)       : ORIGIN = 0x20000000, LENGTH = 320K /* SRAM1(256K) + SRAM2(64K), contiguous */
 }
 
 /* Define output sections */
@@ -67,8 +71,6 @@ SECTIONS
     . = ALIGN(4);
     *(.text)           /* .text sections (code) */
     *(.text*)          /* .text* sections (code) */
-    *(.rodata)         /* .rodata sections (constants, strings, etc.) */
-    *(.rodata*)        /* .rodata* sections (constants, strings, etc.) */
     *(.glue_7)         /* glue arm to thumb code */
     *(.glue_7t)        /* glue thumb to arm code */
 	*(.eh_frame)
@@ -78,7 +80,15 @@ SECTIONS
 
     . = ALIGN(4);
     _etext = .;        /* define a global symbols at end of code */
-    _exit = .;
+  } >FLASH
+
+  /* Constant data goes into FLASH */
+  .rodata :
+  {
+    . = ALIGN(4);
+    *(.rodata)         /* .rodata sections (constants, strings, etc.) */
+    *(.rodata*)        /* .rodata* sections (constants, strings, etc.) */
+    . = ALIGN(4);
   } >FLASH
 
 
@@ -111,19 +121,31 @@ SECTIONS
   } >FLASH
 
   /* used by the startup to initialize data */
-  _sidata = .;
+  _sidata = LOADADDR(.data);
 
   /* Initialized data sections goes into RAM, load LMA copy after code */
-  .data : AT ( _sidata )
+  .data :
   {
     . = ALIGN(4);
     _sdata = .;        /* create a global symbol at data start */
+
+    /* safety state, one MPU region, see board/drivers/mpu.h */
+    . = ALIGN(64);
+    _ssafety = .;
+    *(.data.controls_allowed .bss.controls_allowed)
+    *(.data.current_safety_mode .bss.current_safety_mode)
+    *(.data.current_safety_param .bss.current_safety_param)
+    *(.data.current_hooks .bss.current_hooks)
+    *(.data.current_safety_config .bss.current_safety_config)
+    . = ALIGN(64);
+    _esafety = .;
+
     *(.data)           /* .data sections */
     *(.data*)          /* .data* sections */
 
     . = ALIGN(4);
     _edata = .;        /* define a global symbol at data end */
-  } >RAM
+  } >RAM AT> FLASH
 
   /* Uninitialized data section */
   . = ALIGN(4);
@@ -144,23 +166,24 @@ SECTIONS
   /* User_heap_stack section, used to check that there is enough RAM left */
   ._user_heap_stack :
   {
-    . = ALIGN(4);
+    . = ALIGN(8);
     PROVIDE ( end = . );
     PROVIDE ( _end = . );
+    . = ALIGN(512);
+    _stack_guard = .;
+    . = . + 512;
+    _stack_guard_end = .;
     . = . + _Min_Heap_Size;
     . = . + _Min_Stack_Size;
-    . = ALIGN(4);
+    . = ALIGN(8);
   } >RAM
 
-  /* MEMORY_bank1 section, code must be located here explicitly            */
-  /* Example: extern int foo(void) __attribute__ ((section (".mb1text"))); */
-  .memory_b1_text :
-  {
-    *(.mb1text)        /* .mb1text sections (code) */
-    *(.mb1text*)       /* .mb1text* sections (code)  */
-    *(.mb1rodata)      /* read-only data (constants) */
-    *(.mb1rodata*)
-  } >MEMORY_B1
+  ASSERT((_esafety - _ssafety) <= 64, "safety state doesn't fit its MPU region")
+  ASSERT(DEFINED(controls_allowed) ? (controls_allowed >= _ssafety && controls_allowed < _esafety) : !DEFINED(safety_tx_hook), "controls_allowed not in the MPU region")
+  ASSERT(DEFINED(current_safety_mode) ? (current_safety_mode >= _ssafety && current_safety_mode < _esafety) : !DEFINED(safety_tx_hook), "current_safety_mode not in the MPU region")
+  ASSERT(DEFINED(current_safety_param) ? (current_safety_param >= _ssafety && current_safety_param < _esafety) : !DEFINED(safety_tx_hook), "current_safety_param not in the MPU region")
+  ASSERT(DEFINED(current_safety_config) ? (current_safety_config >= _ssafety && current_safety_config < _esafety) : !DEFINED(safety_tx_hook), "current_safety_config not in the MPU region")
+  ASSERT(_estack <= _sram_end, "stack top outside SRAM")
 
   .ARM.attributes 0 : { *(.ARM.attributes) }
 }

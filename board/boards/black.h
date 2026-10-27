@@ -63,11 +63,6 @@ static void black_set_can_mode(uint8_t mode) {
   }
 }
 
-static bool black_check_ignition(void){
-  // ignition is checked through harness
-  return harness_check_ignition();
-}
-
 static void black_init(void) {
   common_init_gpio();
 
@@ -83,14 +78,11 @@ static void black_init(void) {
   black_set_usb_load_switch(true);
 }
 
-static void black_init_bootloader(void) {
-  // GPS OFF
-  set_gpio_output(GPIOC, 5, 0);
-  set_gpio_output(GPIOC, 12, 0);
+static uint32_t black_read_voltage_mV(void){
+  return adc_get_mV(&(adc_signal_t)ADC_CHANNEL_DEFAULT(ADC1, 12)) * 11U;
 }
 
 static harness_configuration black_harness_config = {
-  .has_harness = true,
   .GPIO_SBU1 = GPIOC,
   .GPIO_SBU2 = GPIOC,
   .GPIO_relay_SBU1 = GPIOC,
@@ -99,28 +91,23 @@ static harness_configuration black_harness_config = {
   .pin_SBU2 = 3,
   .pin_relay_SBU1 = 10,
   .pin_relay_SBU2 = 11,
-  .adc_channel_SBU1 = 10,
-  .adc_channel_SBU2 = 13
+  .adc_signal_SBU1 = ADC_CHANNEL_DEFAULT(ADC1, 10),
+  .adc_signal_SBU2 = ADC_CHANNEL_DEFAULT(ADC1, 13)
 };
 
 board board_black = {
   .set_bootkick = unused_set_bootkick,
   .harness_config = &black_harness_config,
   .has_spi = false,
-  .has_canfd = false,
-  .fan_max_rpm = 0U,
-  .fan_max_pwm = 100U,
+  .has_fan = false,
   .avdd_mV = 3300U,
-  .fan_stall_recovery = false,
   .fan_enable_cooldown_time = 0U,
   .init = black_init,
-  .init_bootloader = black_init_bootloader,
   .enable_can_transceiver = black_enable_can_transceiver,
   .led_GPIO = {GPIOC, GPIOC, GPIOC},
   .led_pin = {9, 7, 6},
   .set_can_mode = black_set_can_mode,
-  .check_ignition = black_check_ignition,
-  .read_voltage_mV = white_read_voltage_mV,
+  .read_voltage_mV = black_read_voltage_mV,
   .read_current_mA = unused_read_current,
   .set_fan_enabled = unused_set_fan_enabled,
   .set_ir_power = unused_set_ir_power,

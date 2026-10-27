@@ -45,7 +45,7 @@
 
   .syntax unified
   .cpu cortex-m4
-  .fpu softvfp
+  .fpu fpv4-sp-d16
   .thumb
 
 .global  g_pfnVectors
@@ -79,6 +79,7 @@ defined in linker script */
 Reset_Handler:
   ldr   sp, =_estack       /* set stack pointer */
   bl __initialize_hardware_early
+  bl ram_test_startup
 
 /* Copy the data segment initializers from flash to SRAM */
   movs  r1, #0
@@ -119,15 +120,22 @@ LoopFillZerobss:
 
 /**
  * @brief  This is the code that gets called when the processor receives an
- *         unexpected interrupt.  This simply enters an infinite loop, preserving
- *         the system state for examination by a debugger.
+ *         unexpected interrupt.  It resets through the HardFault handler, so the
+ *         reset shows up in health.
  * @param  None
  * @retval None
 */
+/* the app firmware links the real one from self_test.s, the bootstub doesn't test RAM */
+    .section  .text.ram_test_none,"ax",%progbits
+ram_test_none:
+  bx lr
+.size  ram_test_none, .-ram_test_none
+  .weak  ram_test_startup
+  .thumb_set ram_test_startup, ram_test_none
+
     .section  .text.Default_Handler,"ax",%progbits
 Default_Handler:
-Infinite_Loop:
-  b  Infinite_Loop
+  b  HardFault_Handler
   .size  Default_Handler, .-Default_Handler
 /******************************************************************************
 *

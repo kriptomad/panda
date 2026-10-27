@@ -54,6 +54,7 @@ void set_power_save_state(bool enable) {
   }
 }
 
+#ifdef STM32H7
 static void enter_stop_mode(void) {
   // the SPI CS interrupt shares an IRQ with the FDCAN3 RX wakeup line, and doesn't clear its pending bit
   nvic_disable(EXTI15_10_IRQn);
@@ -161,3 +162,86 @@ static void enter_stop_mode(void) {
 
   NVIC_SystemReset();
 }
+#else
+// STM32F4 (black panda): same flow, only reached from the debug command since no F4 board has a SOM GPIO
+static void enter_stop_mode(void) {
+  // set all GPIO to analog mode to reduce power, analog mode also disables pull resistors
+  register_set(&(GPIOA->MODER), 0xFFFFFFFFU, 0xFFFFFFFFU);
+  register_set(&(GPIOB->MODER), 0xFFFFFFFFU, 0xFFFFFFFFU);
+  register_set(&(GPIOC->MODER), 0xFFFFFFFFU, 0xFFFFFFFFU);
+  register_set(&(GPIOD->MODER), 0xFFFFFFFFU, 0xFFFFFFFFU);
+
+  // init GPIO to lowest power state
+  current_board->set_bootkick(BOOT_STANDBY);
+  current_board->set_amp_enabled(false);
+  for (uint8_t i = 1U; i <= 4U; i++) {
+    current_board->enable_can_transceiver(i, false);
+  }
+
+  // disable ADC and the internal sensors
+  register_clear_bits(&(ADC1->CR2), ADC_CR2_ADON);
+  register_clear_bits(&(ADC->CCR), ADC_CCR_TSVREFE);
+
+  // SBU pins to input for EXTI wakeup
+  set_gpio_mode(current_board->harness_config->GPIO_SBU1,
+                current_board->harness_config->pin_SBU1, MODE_INPUT);
+  set_gpio_mode(current_board->harness_config->GPIO_SBU2,
+                current_board->harness_config->pin_SBU2, MODE_INPUT);
+
+  // EXTI0: SBU1 (PC0)
+  // EXTI3: SBU2 (PC3)
+  register_set(&(SYSCFG->EXTICR[0]), SYSCFG_EXTICR1_EXTI0_PC | SYSCFG_EXTICR1_EXTI3_PC, 0xF00FU);
+  register_set_bits(&(EXTI->IMR), (1U << 0) | (1U << 3));
+  register_set_bits(&(EXTI->RTSR), (1U << 0) | (1U << 3));
+  register_set_bits(&(EXTI->FTSR), (1U << 0) | (1U << 3));
+
+  // EXTI for CAN wakeup, CAN1 RX (PB8) and CAN3 RX (PA8) share EXTI8, so only the main bus is on it
+  // EXTI8: CAN1 RX (PB8) or CAN3 RX (PA8) when flipped
+  // EXTI5: CAN2 RX (PB5)
+  if (harness.status == HARNESS_STATUS_FLIPPED) {
+    set_gpio_mode(GPIOA, 8, MODE_INPUT);
+    register_set(&(SYSCFG->EXTICR[2]), SYSCFG_EXTICR3_EXTI8_PA, 0xFU);
+  } else {
+    set_gpio_mode(GPIOB, 8, MODE_INPUT);
+    register_set(&(SYSCFG->EXTICR[2]), SYSCFG_EXTICR3_EXTI8_PB, 0xFU);
+  }
+  set_gpio_mode(GPIOB, 5, MODE_INPUT);
+  register_set(&(SYSCFG->EXTICR[1]), SYSCFG_EXTICR2_EXTI5_PB, 0xF0U);
+  uint32_t can_exti_line = (1UL << 8) | (1UL << 5);
+  register_set_bits(&(EXTI->IMR), can_exti_line);
+  register_set_bits(&(EXTI->FTSR), can_exti_line);
+
+  // clear pending EXTI
+  EXTI->PR = (1U << 0) | (1U << 3) | can_exti_line;
+
+  // reset if ignition just came on before going to sleep
+  if (harness_check_ignition()) {
+    NVIC_SystemReset();
+  }
+
+  // stop mode with the regulator in low power mode, flash powered down
+  register_set(&(PWR->CR), PWR_CR_LPDS | PWR_CR_FPDS, PWR_CR_PDDS | PWR_CR_LPDS | PWR_CR_FPDS);
+
+  // enter stop mode on WFI
+  SCB->SCR |= SCB_SCR_SLEEPDEEP_Msk;
+
+  __disable_irq();
+
+  // disable all NVIC interrupts and clear pending
+  for (uint32_t i = 0U; i < 8U; i++) {
+    NVIC->ICER[i] = 0xFFFFFFFFU;
+    NVIC->ICPR[i] = 0xFFFFFFFFU;
+  }
+  // enable only wakeup EXTI interrupts
+  NVIC_EnableIRQ(EXTI0_IRQn);     // SBU1 (PC0)
+  NVIC_EnableIRQ(EXTI3_IRQn);     // SBU2 (PC3)
+  NVIC_EnableIRQ(EXTI9_5_IRQn);   // CAN1/CAN3 RX (EXTI8), CAN2 RX (PB5)
+
+  __DSB();
+  __ISB();
+  // cppcheck-suppress misra-c2012-17.3 ; CMSIS __WFI macro expands to inline asm
+  __WFI();
+
+  NVIC_SystemReset();
+}
+#endif

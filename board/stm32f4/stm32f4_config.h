@@ -1,3 +1,5 @@
+#pragma once
+
 #include "stm32f4xx.h"
 #include "stm32f4xx_hal_gpio_ex.h"
 #define MCU_IDCODE 0x463U
@@ -15,7 +17,7 @@
 
 #define MAX_LED_FADE 8192U
 
-#define NUM_INTERRUPTS 102U                // There are 102 external interrupt sources (see stm32f413.h)
+#define NUM_INTERRUPTS 102U                // There are 102 external interrupt sources (see stm32f413xx.h)
 
 #define TICK_TIMER_IRQ TIM1_BRK_TIM9_IRQn
 #define TICK_TIMER TIM9
@@ -40,23 +42,25 @@
 #endif
 
 #include "board/libc.h"
-#include "board/critical.h"
-#include "board/faults.h"
+#include "board/sys/critical.h"
+#include "board/sys/faults.h"
 #include "board/utils.h"
 
 #include "board/drivers/registers.h"
 #include "board/drivers/interrupts.h"
+
 #include "board/drivers/gpio.h"
 #include "board/stm32f4/peripherals.h"
 #include "board/stm32f4/interrupt_handlers.h"
 #include "board/drivers/timers.h"
-#include "board/stm32f4/board.h"
-#include "board/stm32f4/clock.h"
 
 #if !defined(BOOTSTUB)
-  #include "board/drivers/uart.h"
-  #include "board/stm32f4/lluart.h"
+  #include "board/drivers/debug.h"
+  #include "board/drivers/mpu.h"
 #endif
+
+#include "board/stm32f4/board.h"
+#include "board/stm32f4/clock.h"
 
 #ifdef BOOTSTUB
   #include "board/stm32f4/llflash.h"
@@ -66,10 +70,10 @@
 
 #include "board/stm32f4/llusb.h"
 
-// unused
-void spi_init(void) {};
-void sound_tick(void) {};
-void can_tx_comms_resume_spi(void) {};
+// No SPI slave interface on the STM32F4 boards (black panda is USB only)
+uint16_t spi_error_count = 0;
+void spi_init(void) {}
+void can_tx_comms_resume_spi(void) {}
 
 void early_gpio_float(void) {
   RCC->AHB1ENR = RCC_AHB1ENR_GPIOAEN | RCC_AHB1ENR_GPIOBEN | RCC_AHB1ENR_GPIOCEN;

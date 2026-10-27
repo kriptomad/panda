@@ -6,7 +6,9 @@ struct harness_t harness;
 
 #ifdef ALLOW_DEBUG
 bool relay_readback_inject = false;
+#ifdef STM32H7
 uint16_t harness_adc2_offset_mV = 0U;
+#endif
 #endif
 
 // The ignition relay is only used for testing purposes
@@ -80,6 +82,7 @@ static uint8_t harness_detect_orientation(void) {
     uint16_t detection_threshold = current_board->avdd_mV / 2U;
 
     // ADC_SM_4: SBU1 is on ADC1 and ADC2
+#ifdef STM32H7
     if (!adc2_busy) {
       adc_signal_t sbu1_adc2 = current_board->harness_config->adc_signal_SBU1;
       sbu1_adc2.adc = ADC2;
@@ -89,6 +92,9 @@ static uint8_t harness_detect_orientation(void) {
       #endif
       adc_mismatches = (ABS((int32_t)harness.sbu1_voltage_mV - (int32_t)sbu1_adc2_mV) <= 100) ? 0U : (adc_mismatches + 1U);
     }
+#else
+    // the STM32F413 has a single ADC, no cross-check; adc_check() on AVDD is the only ADC monitor
+#endif
 
     // Detect connection and orientation
     if((harness.sbu1_voltage_mV < detection_threshold) || (harness.sbu2_voltage_mV < detection_threshold)){

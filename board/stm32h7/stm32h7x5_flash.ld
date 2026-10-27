@@ -164,7 +164,7 @@ SECTIONS
     . = ALIGN(4);
     _sdata = .;        /* create a global symbol at data start */
 
-    /* safety state, one MPU region, see board/stm32h7/llmpu.h */
+    /* safety state, one MPU region, see board/drivers/mpu.h */
     . = ALIGN(64);
     _ssafety = .;
     *(.data.controls_allowed .bss.controls_allowed)
