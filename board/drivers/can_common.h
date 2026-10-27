@@ -19,7 +19,12 @@ bool can_loopback = false;
   extern can_ring can_##x; \
   can_ring can_##x = { .w_ptr = 0, .r_ptr = 0, .fifo_size = (size), .elems = (CANPacket_t *)&(elems_##x) };
 
+#ifdef STM32F4
+// 320K of RAM total: 2048 + 3*416 packets of 72 bytes leave ~64K for everything else
+#define CAN_RX_BUFFER_SIZE 2048U
+#else
 #define CAN_RX_BUFFER_SIZE 4096U
+#endif
 #define CAN_TX_BUFFER_SIZE 416U
 
 #ifdef STM32H7

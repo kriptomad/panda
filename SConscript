@@ -95,7 +95,7 @@ def build_project(project_name, project, main, extra_flags):
     CFLAGS=flags,
     ASFLAGS=flags,
     LINKFLAGS=flags,
-    CPPPATH=[Dir("./"), "./board/stm32h7/inc", opendbc.INCLUDE_PATH],
+    CPPPATH=[Dir("./"), project["INC_DIR"], opendbc.INCLUDE_PATH],
     ASCOM="$AS $ASFLAGS -o $TARGET -c $SOURCES",
     BUILDERS={
       'Objcopy': Builder(generator=objcopy, suffix='.bin', src_suffix='.elf')
@@ -119,7 +119,7 @@ def build_project(project_name, project, main, extra_flags):
   # Build + sign main (aka app)
   main_elf = env.Program(f"{project_dir}/main.elf", [
     startup,
-    env.Object("./board/stm32h7/self_test.s"),
+    env.Object(project["SELF_TEST_FILE"]),
     main
   ], LINKFLAGS=[f"-Wl,--section-start,.isr_vector={project['APP_START_ADDRESS']}"] + flags)
   main_bin = env.Objcopy(f"{project_dir}/main.bin", main_elf)
@@ -130,6 +130,8 @@ def build_project(project_name, project, main, extra_flags):
 
 base_project_h7 = {
   "STARTUP_FILE": "./board/stm32h7/startup_stm32h7x5xx.s",
+  "SELF_TEST_FILE": "./board/stm32h7/self_test.s",
+  "INC_DIR": "./board/stm32h7/inc",
   "LINKER_SCRIPT": "./board/stm32h7/stm32h7x5_flash.ld",
   "APP_START_ADDRESS": "0x8020000",
   "FLAGS": [
@@ -139,6 +141,22 @@ base_project_h7 = {
     "-DSTM32H725xx",
     "-Iboard/stm32h7/inc",
     "-mfpu=fpv5-d16",
+  ],
+}
+
+base_project_f4 = {
+  "STARTUP_FILE": "./board/stm32f4/startup_stm32f413xx.s",
+  "SELF_TEST_FILE": "./board/stm32f4/self_test.s",
+  "INC_DIR": "./board/stm32f4/inc",
+  "LINKER_SCRIPT": "./board/stm32f4/stm32f4_flash.ld",
+  "APP_START_ADDRESS": "0x8004000",
+  "FLAGS": [
+    "-mcpu=cortex-m4",
+    "-mhard-float",
+    "-DSTM32F4",
+    "-DSTM32F413xx",
+    "-Iboard/stm32f4/inc",
+    "-mfpu=fpv4-sp-d16",
   ],
 }
 
@@ -168,6 +186,7 @@ common_flags += [f"-DHEALTH_PACKET_VERSION=0x{hh:08X}U", f"-DCAN_PACKET_VERSION_
 
 # panda fw
 build_project("panda_h7", base_project_h7, "./board/main.c", [])
+build_project("panda", base_project_f4, "./board/main.c", [])
 
 # body fw
 build_project("body_h7", base_project_h7, "./board/body/main.c", ["-DPANDA_BODY"])
