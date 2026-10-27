@@ -11,9 +11,10 @@
 // 5000 = 500 kbps
 #define can_speed_to_prescaler(x) (CAN_PCLK / CAN_QUANTA * 10U / (x))
 
-#define CAN_NAME_FROM_CANIF(CAN_DEV) (((CAN_DEV)==CAN1) ? "CAN1" : (((CAN_DEV) == CAN2) ? "CAN2" : "CAN3"))
+// bxCAN ESR LEC value for an acknowledgment error
+#define CAN_ACK_ERROR 3U
 
-void print(const char *a);
+#define CAN_NAME_FROM_CANIF(CAN_DEV) (((CAN_DEV)==CAN1) ? "CAN1" : (((CAN_DEV) == CAN2) ? "CAN2" : "CAN3"))
 
 // kbps multiplied by 10
 #define SPEEDS_ARRAY_SIZE 8

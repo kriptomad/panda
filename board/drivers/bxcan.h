@@ -1,17 +1,19 @@
-#include "bxcan_declarations.h"
+#pragma once
+
+#include "board/drivers/drivers.h"
 
 // IRQs: CAN1_TX, CAN1_RX0, CAN1_SCE
 //       CAN2_TX, CAN2_RX0, CAN2_SCE
 //       CAN3_TX, CAN3_RX0, CAN3_SCE
 
-CAN_TypeDef *cans[CAN_ARRAY_SIZE] = {CAN1, CAN2, CAN3};
-uint8_t can_irq_number[CAN_IRQS_ARRAY_SIZE][CAN_IRQS_ARRAY_SIZE] = {
+CAN_TypeDef *cans[PANDA_CAN_CNT] = {CAN1, CAN2, CAN3};
+uint8_t can_irq_number[PANDA_CAN_CNT][CAN_IRQS_ARRAY_SIZE] = {
   { CAN1_TX_IRQn, CAN1_RX0_IRQn, CAN1_SCE_IRQn },
   { CAN2_TX_IRQn, CAN2_RX0_IRQn, CAN2_SCE_IRQn },
   { CAN3_TX_IRQn, CAN3_RX0_IRQn, CAN3_SCE_IRQn },
 };
 
-bool can_set_speed(uint8_t can_number) {
+static bool can_set_speed(uint8_t can_number) {
   bool ret = true;
   CAN_TypeDef *CANx = CANIF_FROM_CAN_NUM(can_number);
   uint8_t bus_number = BUS_NUM_FROM_CAN_NUM(can_number);
@@ -20,14 +22,25 @@ bool can_set_speed(uint8_t can_number) {
     CANx,
     bus_config[bus_number].can_speed,
     can_loopback,
-    (unsigned int)(can_silent) & (1U << can_number)
+    can_silent
   );
   return ret;
 }
 
 void can_clear_send(CAN_TypeDef *CANx, uint8_t can_number) {
-  can_health[can_number].can_core_reset_cnt += 1U;
-  llcan_clear_send(CANx);
+  static uint32_t last_reset = 0U;
+  uint32_t time = microsecond_timer_get();
+
+  // Resetting CAN core is a slow blocking operation, limit frequency
+  if (get_ts_elapsed(time, last_reset) > 100000U) {  // 10 Hz
+    can_health[can_number].can_core_reset_cnt += 1U;
+    // the single TX mailbox in use is aborted
+    if ((CANx->TSR & CAN_TSR_TME0) == 0U) {
+      can_health[can_number].total_tx_lost_cnt += 1U;
+    }
+    llcan_clear_send(CANx);
+    last_reset = time;
+  }
 }
 
 void update_can_health_pkt(uint8_t can_number, uint32_t ir_reg) {
@@ -44,6 +57,9 @@ void update_can_health_pkt(uint8_t can_number, uint32_t ir_reg) {
     can_health[can_number].last_stored_error = can_health[can_number].last_error;
   }
 
+  // no separate data phase on classic CAN
+  can_health[can_number].last_data_error = 0U;
+
   can_health[can_number].receive_error_cnt = ((esr_reg & CAN_ESR_REC) >> CAN_ESR_REC_Pos);
   can_health[can_number].transmit_error_cnt = ((esr_reg & CAN_ESR_TEC) >> CAN_ESR_TEC_Pos);
 
@@ -59,7 +75,13 @@ void update_can_health_pkt(uint8_t can_number, uint32_t ir_reg) {
       can_health[can_number].total_rx_lost_cnt += 1U;
       CANx->RF0R &= ~(CAN_RF0R_FOVR0);
     }
-    can_clear_send(CANx, can_number);
+    // Cases:
+    // 1. while multiplexing between buses 1 and 3 we are getting ACK errors that overwhelm CAN core, by resetting it recovers faster
+    // 2. the core gets stuck in bus off recovery state indefinitely
+    if (((can_health[can_number].last_error == CAN_ACK_ERROR) && (can_health[can_number].transmit_error_cnt > 127U)) ||
+     (can_health[can_number].bus_off != 0U)) {
+      can_clear_send(CANx, can_number);
+    }
   }
 }
 
@@ -132,15 +154,12 @@ void process_can(uint8_t can_number) {
 
 // CANx_RX0 IRQ Handler
 // blink blue when we are receiving CAN messages
-void can_rx(uint8_t can_number) {
+static void can_rx(uint8_t can_number) {
   CAN_TypeDef *CANx = CANIF_FROM_CAN_NUM(can_number);
   uint8_t bus_number = BUS_NUM_FROM_CAN_NUM(can_number);
 
   while ((CANx->RF0R & CAN_RF0R_FMP0) != 0U) {
     can_health[can_number].total_rx_cnt += 1U;
-
-    // can is live
-    pending_can_live = 1;
 
     // add to my fifo
     CANPacket_t to_push;
@@ -156,9 +175,11 @@ void can_rx(uint8_t can_number) {
     WORD_TO_BYTE_ARRAY(&to_push.data[4], CANx->sFIFOMailBox[0].RDHR);
     can_set_checksum(&to_push);
 
-    // forwarding (panda only)
+    // forwarding
+    mpu_safety_open();
     int bus_fwd_num = safety_fwd_hook(bus_number, to_push.addr);
-    if (bus_fwd_num != -1) {
+    mpu_safety_close();
+    if (bus_fwd_num >= 0) {
       CANPacket_t to_send;
 
       to_send.fd = 0U;
@@ -175,7 +196,9 @@ void can_rx(uint8_t can_number) {
       can_health[can_number].total_fwd_cnt += 1U;
     }
 
+    mpu_safety_open();
     safety_rx_invalid += safety_rx_hook(&to_push) ? 0U : 1U;
+    mpu_safety_close();
     ignition_can_hook(&to_push);
 
     led_set(LED_BLUE, true);
