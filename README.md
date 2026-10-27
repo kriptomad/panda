@@ -1,16 +1,16 @@
 # Welcome to panda
 
-panda speaks CAN and CAN FD, and it runs on the [STM32H725](https://www.st.com/resource/en/reference_manual/rm0468-stm32h723733-stm32h725735-and-stm32h730-value-line-advanced-armbased-32bit-mcus-stmicroelectronics.pdf).
+panda speaks CAN and CAN FD, and it runs on the [STM32H725](https://www.st.com/resource/en/reference_manual/rm0468-stm32h723733-stm32h725735-and-stm32h730-value-line-advanced-armbased-32bit-mcus-stmicroelectronics.pdf). This fork also keeps the classic CAN only black panda ([STM32F413](https://www.st.com/resource/en/reference_manual/rm0430-stm32f413423-advanced-armbased-32bit-mcus-stmicroelectronics.pdf)) building as the panda target.
 
 ## Directory structure
 
 ```
 .
-├── board           # Code that runs on the STM32
-├── python          # Python userspace library for interfacing with the panda
-├── tests           # Tests for panda
-├── scripts         # Miscellaneous used for panda development and debugging
-├── examples        # Example scripts for using a panda in a car
+??? board           # Code that runs on the STM32
+??? python          # Python userspace library for interfacing with the panda
+??? tests           # Tests for panda
+??? scripts         # Miscellaneous used for panda development and debugging
+??? examples        # Example scripts for using a panda in a car
 ```
 
 ## Safety Model
