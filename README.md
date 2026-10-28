@@ -2,6 +2,8 @@
 
 panda speaks CAN and CAN FD, and it runs on the [STM32H725](https://www.st.com/resource/en/reference_manual/rm0468-stm32h723733-stm32h725735-and-stm32h730-value-line-advanced-armbased-32bit-mcus-stmicroelectronics.pdf). This fork also keeps the classic CAN only black panda ([STM32F413](https://www.st.com/resource/en/reference_manual/rm0430-stm32f413423-advanced-armbased-32bit-mcus-stmicroelectronics.pdf)) building as the panda target.
 
+Flashing guide for a freshly built black panda (Honda City G7 port): [docs/FLASH_BLACK_PANDA_CITY_G7.md](docs/FLASH_BLACK_PANDA_CITY_G7.md) (English) / [docs/FLASH_BLACK_PANDA_CITY_G7.pt-BR.md](docs/FLASH_BLACK_PANDA_CITY_G7.pt-BR.md) (Portugues).
+
 ## Directory structure
 
 ```
