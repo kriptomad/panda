@@ -7,6 +7,32 @@ Status: this procedure has NOT been executed on real hardware yet. It was writte
 code in the repositories below and from the PCB files. Treat every step as "expected", not
 "verified", until the first board is flashed.
 
+## 0. Quick path for option A (flowpilot APK + Loetkolben black panda)
+
+Windows PowerShell, Python 3.11+ installed. Everything below is explained in detail in the
+following sections; this is just the order of operations.
+
+```
+git clone -b flowpilot-city-g7-brazil --depth 1 https://github.com/kriptomad/flowpilot-city-g7.git
+git clone --depth 1 https://github.com/kriptomad/Redesign-Panda-Black-Revival-Port-Firmware-City-G7.git hub
+cd flowpilot-city-g7
+pip install libusb1 pyusb
+
+# 1. hold SW1, plug USB-C, release. Zadig: 0483:df11 -> WinUSB
+python -c "from panda import PandaDFU; print(PandaDFU.list())"
+python -c "from panda import PandaDFU; PandaDFU(None).recover()"
+
+# 2. board comes back as bbaa:ddee. Zadig: WinUSB
+python -c "from panda import Panda; Panda().flash(fn=r'..\hub\10_FLOWPILOT\panda_fw_out\panda.bin.signed')"
+
+# 3. board comes back as bbaa:ddcc. Zadig: WinUSB
+python -c "from panda import Panda; p=Panda(); print(p.get_type(), p.get_version(), p.health()['uptime'])"
+# expected: b'\x03' DEV-a2f1983c-DEBUG <number>
+```
+
+Then unplug from the PC, plug into the phone with the OTG cable and open the flowpilot app;
+it reflashes the application area by itself if the APK carries a newer build.
+
 ## 1. What you need
 
 | Item | Notes |

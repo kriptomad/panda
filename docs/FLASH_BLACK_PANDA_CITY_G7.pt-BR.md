@@ -7,6 +7,32 @@ Situacao: este procedimento NAO foi executado em hardware real ainda. Foi escrit
 codigo dos repositorios abaixo e dos arquivos da PCB. Trate cada passo como "esperado", nao
 como "verificado", ate a primeira placa ser gravada.
 
+## 0. Caminho rapido da opcao A (APK do flowpilot + panda preta do Loetkolben)
+
+Windows PowerShell, Python 3.11+ instalado. Tudo abaixo esta explicado em detalhe nas secoes
+seguintes; aqui e so a ordem das operacoes.
+
+```
+git clone -b flowpilot-city-g7-brazil --depth 1 https://github.com/kriptomad/flowpilot-city-g7.git
+git clone --depth 1 https://github.com/kriptomad/Redesign-Panda-Black-Revival-Port-Firmware-City-G7.git hub
+cd flowpilot-city-g7
+pip install libusb1 pyusb
+
+# 1. segure SW1, conecte o USB-C, solte. Zadig: 0483:df11 -> WinUSB
+python -c "from panda import PandaDFU; print(PandaDFU.list())"
+python -c "from panda import PandaDFU; PandaDFU(None).recover()"
+
+# 2. a placa volta como bbaa:ddee. Zadig: WinUSB
+python -c "from panda import Panda; Panda().flash(fn=r'..\hub\10_FLOWPILOT\panda_fw_out\panda.bin.signed')"
+
+# 3. a placa volta como bbaa:ddcc. Zadig: WinUSB
+python -c "from panda import Panda; p=Panda(); print(p.get_type(), p.get_version(), p.health()['uptime'])"
+# esperado: b'\x03' DEV-a2f1983c-DEBUG <numero>
+```
+
+Depois desconecte do PC, conecte no celular com o cabo OTG e abra o app do flowpilot; ele
+regrava a area da aplicacao sozinho se o APK trouxer um build mais novo.
+
 ## 1. O que e necessario
 
 | Item | Observacoes |
