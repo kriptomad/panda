@@ -1,7 +1,7 @@
 import time
 
 from panda.tests.hitl.base import PandaTestCase, panda_test
-from panda import Panda, PandaDFU, McuType
+from panda import Panda, PandaDFU
 
 
 def check_signature(p):
@@ -20,7 +20,7 @@ class TestProgram(PandaTestCase):
 
     assert dfu_serial in PandaDFU.list()
     with PandaDFU(dfu_serial) as dfu:
-      assert dfu.get_mcu_type() == McuType.H7
+      assert dfu.get_mcu_type() == p.get_mcu_type()
       dfu._handle.clear_status()
       dfu.reset()
     p.reconnect()

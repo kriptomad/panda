@@ -264,7 +264,11 @@ int comms_control_handler(ControlPacket_t *req, uint8_t *resp) {
       break;
     // **** 0xe6: set custom clock source period and pulse length
     case 0xe6:
+#ifdef STM32H7
       clock_source_set_timer_params(req->param1, req->param2);
+#else
+      // the black panda has no clock source output
+#endif
       break;
     // **** 0xe7: set power save state
     case 0xe7:
@@ -313,7 +317,11 @@ int comms_control_handler(ControlPacket_t *req, uint8_t *resp) {
         NVIC_SetPendingIRQ(TICK_TIMER_IRQ);
       } else if (req->param1 == 3U) {
         // halves the counts per LSI capture
+#ifdef STM32H7
         register_set(&(TIM16->PSC), 1U, 0xFFFFU);
+#else
+        register_set(&(TIM5->PSC), 1U, 0xFFFFU);
+#endif
       } else if (req->param1 == 4U) {
         // an unused IRQ, outside nvic_enable
         NVIC_EnableIRQ(WWDG_IRQn);
@@ -332,16 +340,32 @@ int comms_control_handler(ControlPacket_t *req, uint8_t *resp) {
       } else if (req->param1 == 1U) {
         register_set(&(INTERRUPT_TIMER->PSC), (INTERRUPT_TIMER->PSC * 23U) / 20U, 0xFFFFU);
       } else if (req->param1 == 2U) {
+#ifdef STM32H7
         ADC3_COMMON->CCR &= ~ADC_CCR_VREFEN;
+#else
+        ADC->CCR &= ~ADC_CCR_TSVREFE;
+#endif
       } else if (req->param1 == 3U) {
         register_set(&(TICK_TIMER->PSC), (TICK_TIMER->PSC * 23U) / 20U, 0xFFFFU);
       } else if (req->param1 == 4U) {
         // raw writes, outside the register map
+#ifdef STM32H7
         FDCAN1->IE ^= FDCAN_IE_TCFE;
+#else
+        CAN1->IER ^= CAN_IER_TMEIE;
+#endif
       } else if (req->param1 == 5U) {
+#ifdef STM32H7
         RCC->APB1LENR |= RCC_APB1LENR_TIM13EN;
+#else
+        RCC->APB1ENR |= RCC_APB1ENR_TIM13EN;
+#endif
       } else if (req->param1 == 6U) {
+#ifdef STM32H7
         harness_adc2_offset_mV = 500U;
+#else
+        // no second ADC on the F4, there is no SBU cross-check to break
+#endif
       } else if (req->param1 == 7U) {
         // a third MPU region, on unused FMC space
         MPU->RNR = MPU_REGION_STACK_GUARD + 1U;

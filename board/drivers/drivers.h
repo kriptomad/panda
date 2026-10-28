@@ -5,6 +5,8 @@
 #include "board/crc.h"
 #ifdef STM32H7
 #include "board/stm32h7/lladc_declarations.h"
+#elif defined(STM32F4)
+#include "board/stm32f4/lladc_declarations.h"
 #endif
 
 // ******************** bootkick ********************
@@ -77,9 +79,13 @@ void can_send(CANPacket_t *to_push, uint8_t bus_number, bool skip_tx_hook);
 bool is_speed_valid(uint32_t speed, const uint32_t *all_speeds, uint8_t len);
 
 // ******************** clock_source ********************
+// TIM1/TIM8 clock source output, the STM32H7 boards only
+#ifdef STM32H7
 
 void clock_source_set_timer_params(uint16_t param1, uint16_t param2);
 void clock_source_init(bool enable_channel1);
+
+#endif // STM32H7
 
 // ******************** fan ********************
 
@@ -112,6 +118,22 @@ extern FDCAN_GlobalTypeDef *cans[PANDA_CAN_CNT];
 void can_clear_send(FDCAN_GlobalTypeDef *FDCANx, uint8_t can_number);
 void update_can_health_pkt(uint8_t can_number, uint32_t ir_reg);
 
+#endif // STM32H7
+
+// ******************** bxcan ********************
+#ifdef STM32F4
+
+extern CAN_TypeDef *cans[PANDA_CAN_CNT];
+
+#define CAN_IRQS_ARRAY_SIZE 3U
+extern uint8_t can_irq_number[PANDA_CAN_CNT][CAN_IRQS_ARRAY_SIZE];
+
+void can_clear_send(CAN_TypeDef *CANx, uint8_t can_number);
+void update_can_health_pkt(uint8_t can_number, uint32_t ir_reg);
+
+#endif // STM32F4
+
+#if defined(STM32H7) || defined(STM32F4)
 
 // ******************** harness ********************
 
@@ -186,7 +208,7 @@ void nvic_enable(IRQn_Type irq);
 void nvic_disable(IRQn_Type irq);
 void nvic_check(void);
 
-#endif // STM32H7
+#endif // STM32H7 || STM32F4
 
 // ******************** registers ********************
 

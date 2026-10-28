@@ -1,6 +1,6 @@
 #pragma once
 
-// linker symbols, see stm32h7x5_flash.ld
+// linker symbols, see board/stm32h7/stm32h7x5_flash.ld and board/stm32f4/stm32f4_flash.ld
 extern uint32_t _ssafety[16];
 extern uint32_t _stack_guard;
 
